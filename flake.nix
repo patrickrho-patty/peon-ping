@@ -50,10 +50,19 @@
             # Bundled helper scripts (find_bundled_script looks here via BASH_SOURCE fallback)
             for f in scripts/pack-download.sh scripts/notify.sh \
                      scripts/remote-hook.sh scripts/hook-handle-use.sh \
+                     scripts/hook-handle-rename.sh \
                      scripts/mac-overlay.js; do
               [ -f "$f" ] && cp "$f" "$share/scripts/"
             done
             chmod +x "$share/scripts/"*.sh 2>/dev/null || true
+
+            # Wrap hook scripts so they can find python3 (and other runtime deps)
+            # regardless of the PATH Claude Code passes to UserPromptSubmit hooks.
+            for s in "$share/scripts/hook-handle-use.sh" \
+                     "$share/scripts/hook-handle-rename.sh"; do
+              [ -f "$s" ] && wrapProgram "$s" \
+                --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps}
+            done
 
             # Runtime data
             # Do not copy config.json
