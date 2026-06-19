@@ -303,10 +303,12 @@ function run(argv) {
       }
     }
 
-    // Message label — vertically centered
+    // Message label. Single line: vertically centered.
+    // Two lines (subtitle present): message above center, subtitle (body) below.
+    var hasSub = (subtitle !== '');
     var font = $.NSFont.boldSystemFontOfSize(16);
     var textHeight = font.ascender - font.descender + font.leading + 4;
-    var textY = (winHeight - textHeight) / 2;
+    var textY = hasSub ? (winHeight / 2 + 1) : ((winHeight - textHeight) / 2);
     var label = $.NSTextField.alloc.initWithFrame(
       $.NSMakeRect(textX, textY, textWidth, textHeight)
     );
@@ -321,6 +323,28 @@ function run(argv) {
     label.setLineBreakMode($.NSLineBreakByTruncatingTail);
     label.cell.setWraps(false);
     contentView.addSubview(label);
+
+    // Subtitle label — the actual message body (argv[8]), drawn below the title.
+    // Without this the subtitle peon-ping passes is silently dropped.
+    if (hasSub) {
+      var subFont = $.NSFont.systemFontOfSize(16);
+      var subHeight = subFont.ascender - subFont.descender + subFont.leading + 4;
+      var subY = (winHeight / 2) - subHeight - 1;
+      var subLabel = $.NSTextField.alloc.initWithFrame(
+        $.NSMakeRect(textX, subY, textWidth, subHeight)
+      );
+      subLabel.setStringValue($(subtitle));
+      subLabel.setBezeled(false);
+      subLabel.setDrawsBackground(false);
+      subLabel.setEditable(false);
+      subLabel.setSelectable(false);
+      subLabel.setTextColor($.NSColor.colorWithSRGBRedGreenBlueAlpha(1, 1, 1, 0.85));
+      subLabel.setAlignment($.NSTextAlignmentCenter);
+      subLabel.setFont(subFont);
+      subLabel.setLineBreakMode($.NSLineBreakByTruncatingTail);
+      subLabel.cell.setWraps(false);
+      contentView.addSubview(subLabel);
+    }
 
     // "click to focus" hint at bottom-right when click action is available
     if (clickHandler) {

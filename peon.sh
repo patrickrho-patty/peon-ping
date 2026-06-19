@@ -982,6 +982,13 @@ send_notification() {
       fi
       export PEON_MSG_SUBTITLE="${MSG_SUBTITLE:-}"
       export PEON_NOTIFY_TYPE="${NOTIFY_TYPE:-}"
+      # tmux target (socket|pane) so clicking the overlay can switch to the
+      # session's tmux window. Empty when not running inside tmux.
+      if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ]; then
+        export PEON_TMUX_TARGET="${TMUX%%,*}|${TMUX_PANE}"
+      else
+        export PEON_TMUX_TARGET=""
+      fi
       export PEON_NOTIF_CLOSE_BUTTON="${NOTIF_CLOSE_BUTTON:-true}"
       export PEON_SESSION_ID="${SESSION_ID:-}"
       export PEON_NOTIF_STACKING="${NOTIF_STACKING:-true}"
@@ -1012,6 +1019,16 @@ send_notification() {
 
 # --- Platform-aware terminal focus check ---
 terminal_is_focused() {
+  # Inside tmux, the host terminal tab/app can be frontmost while the user is
+  # viewing a DIFFERENT tmux window. The client tty is identical across every
+  # window in a pane, so the app/tab-level checks below cannot detect this.
+  # If our session's tmux window is not the one currently displayed, treat the
+  # session as unfocused so the notification still fires.
+  if [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
+    local _win_active
+    _win_active=$(tmux display-message -p -t "$TMUX_PANE" '#{window_active}' 2>/dev/null || echo 1)
+    [ "$_win_active" = "0" ] && return 1
+  fi
   case "$PEON_PLATFORM" in
     mac)
       local frontmost
@@ -3880,7 +3897,7 @@ if changed:
     if [ -f "$INSTALL_SCRIPT" ]; then
       bash "$INSTALL_SCRIPT"
     else
-      curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/install.sh | bash
+      curl -fsSL https://raw.githubusercontent.com/patrickrho-patty/peon-ping/main/install.sh | bash
     fi
     exit $? ;;
   setup)
@@ -6270,7 +6287,7 @@ if [ "$EVENT" = "SessionStart" ]; then
       LOCAL_VERSION=""
       [ -f "$PEON_DIR/VERSION" ] && LOCAL_VERSION=$(cat "$PEON_DIR/VERSION" | tr -d '[:space:]')
       REMOTE_VERSION=$(curl -fsSL --connect-timeout 3 --max-time 5 \
-        "https://raw.githubusercontent.com/PeonPing/peon-ping/main/VERSION" 2>/dev/null | tr -d '[:space:]')
+        "https://raw.githubusercontent.com/patrickrho-patty/peon-ping/main/VERSION" 2>/dev/null | tr -d '[:space:]')
       if [ -n "$REMOTE_VERSION" ] && [ -n "$LOCAL_VERSION" ] && [ "$REMOTE_VERSION" != "$LOCAL_VERSION" ]; then
         # Write update notice to a file so we can display it
         echo "$REMOTE_VERSION" > "$PEON_DIR/.update_available"
@@ -6287,7 +6304,7 @@ if [ "$EVENT" = "SessionStart" ] && [ -f "$PEON_DIR/.update_available" ]; then
   CUR_VER=""
   [ -f "$PEON_DIR/VERSION" ] && CUR_VER=$(cat "$PEON_DIR/VERSION" | tr -d '[:space:]')
   if [ -n "$NEW_VER" ] && [ "$NEW_VER" != "$CUR_VER" ]; then
-    echo "peon-ping update available: ${CUR_VER:-?} → $NEW_VER — run: curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/install.sh | bash" >&2
+    echo "peon-ping update available: ${CUR_VER:-?} → $NEW_VER — run: curl -fsSL https://raw.githubusercontent.com/patrickrho-patty/peon-ping/main/install.sh | bash" >&2
   elif [ "$NEW_VER" = "$CUR_VER" ]; then
     rm -f "$PEON_DIR/.update_available"
   fi
@@ -6333,6 +6350,11 @@ fi
 # --- Build notification title ---
 TITLE="${NOTIF_MARKER-${MARKER}}${PROJECT}: ${STATUS}"
 NOTIFY_TITLE="${NOTIFY_PROJECT:-$PROJECT}"
+# Append the current git branch (from the session cwd) to the notification title.
+# Fails closed: no git / not a repo / detached HEAD -> title unchanged.
+_peon_branch=""
+[ -n "${CWD:-}" ] && _peon_branch=$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+[ -n "$_peon_branch" ] && [ "$_peon_branch" != "HEAD" ] && NOTIFY_TITLE="${NOTIFY_TITLE} (${_peon_branch})"
 
 # --- Resolve TTY for escape sequences ---
 # Write to /dev/tty so the escape sequence reaches the terminal directly.

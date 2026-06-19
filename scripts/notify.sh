@@ -355,6 +355,7 @@ case "$PEON_PLATFORM" in
         local notify_type="${PEON_NOTIFY_TYPE:-}"
         local all_screens="${PEON_NOTIF_ALL_SCREENS:-true}"
         local close_button="${PEON_NOTIF_CLOSE_BUTTON:-true}"
+        local tmux_target="${PEON_TMUX_TARGET:-}"
 
         # Prepend count badge if stacked
         if [ "$count" -gt 1 ]; then
@@ -382,7 +383,7 @@ case "$PEON_PLATFORM" in
             PEON_CMUX_FOCUS_SOCKET="$cmux_socket_path" \
             PEON_CMUX_FOCUS_WORKSPACE="$cmux_workspace_id" \
             PEON_CMUX_FOCUS_SURFACE="$cmux_surface_id" \
-            osascript -l JavaScript "$overlay_script" "$overlay_msg" "$color" "$local_icon_arg" "$slot" "$dismiss_secs" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" "$notif_position" "$notify_type" "$all_screens" "$_si" "$close_button" >/dev/null 2>&1 &
+            osascript -l JavaScript "$overlay_script" "$overlay_msg" "$color" "$local_icon_arg" "$slot" "$dismiss_secs" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" "$notif_position" "$notify_type" "$all_screens" "$_si" "$close_button" "$tmux_target" >/dev/null 2>&1 &
             _overlay_pids="$_overlay_pids $!"
           done
         else
@@ -393,7 +394,7 @@ case "$PEON_PLATFORM" in
           PEON_CMUX_FOCUS_SOCKET="$cmux_socket_path" \
           PEON_CMUX_FOCUS_WORKSPACE="$cmux_workspace_id" \
           PEON_CMUX_FOCUS_SURFACE="$cmux_surface_id" \
-          osascript -l JavaScript "$overlay_script" "$overlay_msg" "$color" "$local_icon_arg" "$slot" "$dismiss_secs" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" "$notif_position" "$notify_type" "$all_screens" "" "$close_button" >/dev/null 2>&1 &
+          osascript -l JavaScript "$overlay_script" "$overlay_msg" "$color" "$local_icon_arg" "$slot" "$dismiss_secs" "$bundle_id" "$ide_pid" "$session_tty" "$subtitle" "$notif_position" "$notify_type" "$all_screens" "" "$close_button" "$tmux_target" >/dev/null 2>&1 &
           _overlay_pids="$!"
         fi
         # Save session state for stacking

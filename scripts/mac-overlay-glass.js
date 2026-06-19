@@ -21,6 +21,12 @@ function run(argv) {
   var allScreens  = argv[11] === 'true';
   var screenIdx   = (argv[12] !== undefined && argv[12] !== '') ? parseInt(argv[12], 10) : -1;
   var showCloseButton = (argv[13] || 'true') === 'true';
+  var tmuxTarget  = argv[14] || '';  // "socket|pane" — click switches to this tmux window
+  var tmuxSock = '', tmuxPane = '';
+  if (tmuxTarget) {
+    var _ti = tmuxTarget.indexOf('|');
+    if (_ti > 0) { tmuxSock = tmuxTarget.slice(0, _ti); tmuxPane = tmuxTarget.slice(_ti + 1); }
+  }
 
   // ── Type text ──
   var typeText;
@@ -39,9 +45,9 @@ function run(argv) {
   }
 
   // ── Window dimensions ──
-  var winW = 380, winH = 160;
+  var winW = 440, winH = 190;
   var padX = 20, padY = 20;
-  var contentW = 340, contentH = 120;
+  var contentW = 400, contentH = 150;
   var cornerRadius = 16;
 
   // ── NSApp setup ──
@@ -210,7 +216,7 @@ function run(argv) {
   win.contentView.addSubview(makeLabel(typeText, textX, padY + contentH - 38, 10, 'HelveticaNeue-Bold', accentR, accentG, accentB, 0.7));
 
   // Message — word-wrap
-  var msgFontName = 'HelveticaNeue', msgFontSize = 13;
+  var msgFontName = 'HelveticaNeue', msgFontSize = 16;
   var msgFont = $.NSFont.fontWithNameSize(msgFontName, msgFontSize);
   if (!msgFont || msgFont.isNil()) msgFont = $.NSFont.systemFontOfSize(msgFontSize);
   var maxMW = contentW - 50;
@@ -227,7 +233,7 @@ function run(argv) {
   }
   if (curLine) lines.push(curLine);
 
-  var lineH = 18;
+  var lineH = 21;
   var topLineY = padY + contentH - 56;
   for (var li = 0; li < lines.length; li++) {
     var yPos = topLineY - li * lineH;
@@ -236,7 +242,13 @@ function run(argv) {
 
   // Context subtitle — smaller, word-wrapped, below message
   if (subtitle) {
-    var subFontSize = 10, subFontName = 'HelveticaNeue';
+    // Hard cap so a long summary can't overflow the panel (makeLabel sizeToFit
+    // grows the label to the text width). ~3 lines at 14pt fits the taller window.
+    var subMaxChars = 138;
+    if (subtitle.length > subMaxChars) {
+      subtitle = subtitle.slice(0, subMaxChars).replace(/\s+\S*$/, '').trim() + '…';
+    }
+    var subFontSize = 14, subFontName = 'HelveticaNeue';
     var subFont = $.NSFont.fontWithNameSize(subFontName, subFontSize);
     if (!subFont || subFont.isNil()) subFont = $.NSFont.systemFontOfSize(subFontSize);
     var subTmp = $.NSTextField.alloc.initWithFrame($.NSMakeRect(0,0,400,20));
@@ -251,12 +263,12 @@ function run(argv) {
       } else { subCur = subTest; }
     }
     if (subCur) subLines.push(subCur);
-    if (subLines.length > 2) subLines = [subLines[0], subLines[1] + '...'];
-    var subLineH = 13;
+    if (subLines.length > 3) subLines = [subLines[0], subLines[1], subLines[2] + '…'];
+    var subLineH = 18;
     var subTopY = topLineY - lines.length * lineH - 3;
     for (var sl=0; sl<subLines.length; sl++) {
       var subYPos = subTopY - sl * subLineH;
-      win.contentView.addSubview(makeLabel(subLines[sl], textX, subYPos, subFontSize, subFontName, 0.7, 0.75, 0.85, 0.55));
+      win.contentView.addSubview(makeLabel(subLines[sl], textX, subYPos, subFontSize, subFontName, 0.9, 0.92, 0.97, 0.85));
     }
   }
 
@@ -271,6 +283,26 @@ function run(argv) {
   ObjC.registerSubclass({
     name: 'GlassDismissHandler', superclass: 'NSObject',
     methods: { 'handleDismiss': { types: ['void', []], implementation: function() {
+      // Click-to-focus: switch to the session's tmux window, then bring the
+      // terminal app forward. Fire-and-forget; never blocks the dismiss.
+      try {
+        if (tmuxSock && tmuxPane) {
+          var q = function(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; };
+          var cmd = 'tmux -S ' + q(tmuxSock) + ' select-window -t ' + q(tmuxPane) +
+                    ' \\; select-pane -t ' + q(tmuxPane) + ' >/dev/null 2>&1 || true';
+          var task = $.NSTask.alloc.init;
+          task.launchPath = '/bin/sh';
+          task.arguments = ['-c', cmd];
+          task.launch;
+        }
+        if (bundleId) {
+          var apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier($(bundleId));
+          if (apps && apps.count > 0) apps.objectAtIndex(0).activateWithOptions($.NSApplicationActivateIgnoringOtherApps);
+        } else if (idePid > 0) {
+          var ra = $.NSRunningApplication.runningApplicationWithProcessIdentifier(idePid);
+          if (ra && !ra.isNil()) ra.activateWithOptions($.NSApplicationActivateIgnoringOtherApps);
+        }
+      } catch (e) {}
       // Signal ALL sibling overlays to dismiss (event-driven, no polling!)
       $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObject($(dismissNotificationName), $.NSString.string);
       // Hide windows to prevent focus shift from iTerm overlay, then exit
